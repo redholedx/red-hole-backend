@@ -1,0 +1,14 @@
+# Render Blueprint — Red Hole backend (free tier)
+# Is file ko GitHub repo ki root mein rakhen, phir Render dashboard:
+# New -> Blueprint -> repo select karen. Koi account abhi nahi banaya gaya.
+services:
+  - type: web
+    name: red-hole-backend
+    env: node
+    plan: free
+    rootDir: oracle-backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
