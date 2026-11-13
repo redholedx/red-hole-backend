@@ -5,7 +5,14 @@
 
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const { execFile } = require('child_process');
+
+// yt-dlp binary: pehle repo ke andar ./bin/yt-dlp (Render postinstall se
+// download hota hai), warna system PATH wala `yt-dlp` (local Ubuntu test).
+const LOCAL_YTDLP = path.join(__dirname, 'bin', 'yt-dlp');
+const YTDLP = fs.existsSync(LOCAL_YTDLP) ? LOCAL_YTDLP : 'yt-dlp';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -73,7 +80,7 @@ app.post('/api/download', (req, res) => {
 
   const args = ['-g', '-f', format, '--no-playlist', '--no-warnings', url];
 
-  execFile('yt-dlp', args, { timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+  execFile(YTDLP, args, { timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
     if (err) {
       console.error('yt-dlp fail:', stderr || err.message);
       return res.status(400).json({
