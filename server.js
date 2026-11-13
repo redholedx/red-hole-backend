@@ -78,23 +78,39 @@ app.post('/api/download', (req, res) => {
     format = 'bestvideo[height<=720]+bestaudio/best[height<=720]/best';
   }
 
-  const args = ['-g', '-f', format, '--no-playlist', '--no-warnings', url];
+  // YouTube datacenter IP ko aksar block karta hai ("Failed to extract any
+  // player response"). Web client ki bajaye Android/iOS player client se
+  // YouTubei API use hoti hai, jo aksar chal jata hai. YouTube links par
+  // pehle android, phir ios, phir default client try karo; baaki sites par
+  // sirf ek dafa.
+  const isYouTube = /(^|\.)(youtube\.com|youtu\.be)$/i.test((() => { try { return new URL(url).hostname; } catch (e) { return ''; } })());
+  const clients = isYouTube ? ['android', 'ios', null] : [null];
 
-  execFile(YTDLP, args, { timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-    if (err) {
-      console.error('yt-dlp fail:', stderr || err.message);
-      return res.status(400).json({
-        ok: false,
-        error: 'Is link se video nahi mili. Link public hona chahiye — private Instagram / login wali video free par nahi khulti. Dobara try karen ya doosra link dalen.'
-      });
-    }
-    // -g kabhi kabhi 2 URLs deta hai (video + audio alag). Pehli line lo.
-    const directUrl = String(stdout).split('\n').map(s => s.trim()).filter(Boolean)[0];
-    if (!directUrl) {
-      return res.status(400).json({ ok: false, error: 'Video URL nahi mili. Dobara try karen.' });
-    }
-    res.json({ ok: true, url: directUrl, audioOnly: audioOnly, quality: quality });
-  });
+  function tryClient(i) {
+    const client = clients[i];
+    const args = ['-g', '-f', format, '--no-playlist', '--no-warnings'];
+    if (client) args.push('--extractor-args', 'youtube:player_client=' + client);
+    args.push(url);
+
+    execFile(YTDLP, args, { timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        console.error('yt-dlp fail (client=' + (client || 'default') + '):', (stderr || err.message || '').split('\n').slice(-2).join(' '));
+        if (i + 1 < clients.length) return tryClient(i + 1);
+        return res.status(400).json({
+          ok: false,
+          error: 'Is link se video nahi mili. Link public hona chahiye — private Instagram / login wali video free par nahi khulti. Dobara try karen ya doosra link dalen.'
+        });
+      }
+      // -g kabhi kabhi 2 URLs deta hai (video + audio alag). Pehli line lo.
+      const directUrl = String(stdout).split('\n').map(s => s.trim()).filter(Boolean)[0];
+      if (!directUrl) {
+        if (i + 1 < clients.length) return tryClient(i + 1);
+        return res.status(400).json({ ok: false, error: 'Video URL nahi mili. Dobara try karen.' });
+      }
+      res.json({ ok: true, url: directUrl, audioOnly: audioOnly, quality: quality });
+    });
+  }
+  tryClient(0);
 });
 
 // Galat route par saaf jawab
